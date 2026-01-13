@@ -17,28 +17,25 @@ class CallInfoActivity : AppCompatActivity() {
 
     companion object {
         private const val TAG = "CallerInsight"
-        private const val BACKEND_URL = "http://10.0.2.2:8000/analyze" // emulator -> your Mac
+        private const val BACKEND_URL = "http://192.168.0.123:8000/analyze"
     }
 
     private lateinit var tvNumber: TextView
     private lateinit var tvInfo: TextView
 
-    // Increments for each new call. Late network responses will be ignored.
+
     private val requestToken = AtomicInteger(0)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Modern way (Android 8.1+)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
             setShowWhenLocked(true)
             setTurnScreenOn(true)
 
-            // Optional: attempt to dismiss keyguard if possible
             val km = getSystemService(KeyguardManager::class.java)
             km?.requestDismissKeyguard(this, null)
         } else {
-            // Legacy flags for older Android
             @Suppress("DEPRECATION")
             window.addFlags(
                 WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
@@ -54,7 +51,6 @@ class CallInfoActivity : AppCompatActivity() {
         handleIntent(intent)
     }
 
-    // This is the key for “next call comes in while Activity already open”
     override fun onNewIntent(intent: Intent?) {
         super.onNewIntent(intent)
         if (intent == null) return
@@ -64,19 +60,13 @@ class CallInfoActivity : AppCompatActivity() {
 
     private fun handleIntent(intent: Intent) {
         val number = intent.getStringExtra("phone_number") ?: getString(R.string.unknown_number)
-
-        // Update UI instantly so it doesn’t look stuck
         tvNumber.text = number
         tvInfo.text = getString(R.string.searching)
-
-        // New token for this call
         val token = requestToken.incrementAndGet()
         Log.d(TAG, "handleIntent(): number=$number token=$token")
 
         Thread {
             val result = fetchCallerInsight(number)
-
-            // If another call arrived while fetching, ignore this result
             if (token != requestToken.get()) {
                 Log.d(TAG, "Ignoring stale response token=$token current=${requestToken.get()}")
                 return@Thread

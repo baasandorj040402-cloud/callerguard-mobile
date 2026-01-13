@@ -2,13 +2,12 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
-    <!-- Needed to see call details -->
     <uses-permission android:name="android.permission.READ_PHONE_STATE" />
-
-    <!-- Needed to call your backend (Serper + DeepSeek runs on your computer/server) -->
     <uses-permission android:name="android.permission.INTERNET" />
-
-    <!-- Call screening binding permission -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <uses-permission 
+        android:name="android.permission.PACKAGE_USAGE_STATS"
+        tools:ignore="ProtectedPermissions" />
     <uses-permission
         android:name="android.permission.BIND_SCREENING_SERVICE"
         tools:ignore="ProtectedPermissions" />
@@ -31,7 +30,7 @@
             </intent-filter>
         </activity>
 
-        <!-- Activity we’ll show on top of the call screen -->
+        <!-- Optional: if you still use CallInfoActivity -->
         <activity
             android:name=".CallInfoActivity"
             android:exported="false"
@@ -49,6 +48,11 @@
                 <action android:name="android.telecom.CallScreeningService" />
             </intent-filter>
         </service>
+
+        <!-- Overlay service -->
+        <service
+            android:name=".CallOverlayService"
+            android:exported="false" />
 
     </application>
 </manifest>

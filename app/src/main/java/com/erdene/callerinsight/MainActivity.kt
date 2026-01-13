@@ -11,7 +11,6 @@ class MainActivity : AppCompatActivity() {
 
     private val requestPhoneStatePermission =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-            // you can show a toast if you want when not granted
         }
 
     override fun onCreate(savedInstanceState: Bundle?) {
