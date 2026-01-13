@@ -1,0 +1,10 @@
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <style name="Base.Theme.CallerInsight" parent="Theme.Material3.DayNight.NoActionBar">
+    </style>
+
+    <style name="Theme.CallerInsight" parent="Base.Theme.CallerInsight" />
+    <style name="Theme.CallerInsight.CallOverlay" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+    </style>
+</resources>

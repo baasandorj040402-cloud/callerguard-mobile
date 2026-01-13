@@ -1,0 +1,9 @@
+<resources>
+    <string name="app_name">CallerInsight</string>
+    <string name="searching">Searching…</string>
+    <string name="unknown_number">Unknown number</string>
+    <string name="failed_fetch">Failed to fetch info.</string>
+    <string name="backend_error">Backend error</string>
+    <string name="no_info">No info.</string>
+    <string name="risk_prefix">Risk: </string>
+</resources>
