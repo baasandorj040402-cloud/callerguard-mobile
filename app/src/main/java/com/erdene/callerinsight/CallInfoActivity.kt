@@ -8,6 +8,7 @@ import android.util.Log
 import android.view.WindowManager
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
+import com.erdene.callerinsight.Constants.BACKEND_URL
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
@@ -17,7 +18,6 @@ class CallInfoActivity : AppCompatActivity() {
 
     companion object {
         private const val TAG = "CallerInsight"
-        private const val BACKEND_URL = "http://192.168.0.123:8000/analyze"
     }
 
     private lateinit var tvNumber: TextView

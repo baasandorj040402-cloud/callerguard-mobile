@@ -19,6 +19,7 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.WindowManager
 import android.widget.TextView
+import com.erdene.callerinsight.Constants.BACKEND_URL
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
@@ -32,7 +33,6 @@ class CallOverlayService : Service() {
 
         // Emulator: http://10.0.2.2:8000/analyze
         // Real phone: change to your Mac LAN IP like http://192.168.0.50:8000/analyze
-        private const val BACKEND_URL = "http://192.168.0.122:8000/analyze"
 
         private const val CHECK_MS = 350L
         private const val STREAK_THRESHOLD = 3 // ~1 second
@@ -94,7 +94,7 @@ class CallOverlayService : Service() {
             if (isDialerTop) dialerStreak++ else dialerStreak = 0
             val shouldShow = dialerStreak >= STREAK_THRESHOLD
 
-            overlayView?.visibility = View.VISIBLE
+            overlayView?.visibility = if (shouldShow) View.VISIBLE else View.GONE
 
             // Debug: see what package it thinks is top
             Log.d(TAG, "Top=$fg dialerStreak=$dialerStreak show=$shouldShow")

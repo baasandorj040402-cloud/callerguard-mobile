@@ -30,6 +30,10 @@
             </intent-filter>
         </activity>
 
+        <activity
+            android:name=".ManualSearchActivity"
+            android:exported="false" />
+
         <!-- Optional: if you still use CallInfoActivity -->
         <activity
             android:name=".CallInfoActivity"
