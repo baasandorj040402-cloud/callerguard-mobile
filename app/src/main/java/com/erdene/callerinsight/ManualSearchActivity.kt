@@ -5,15 +5,19 @@ import android.util.Log
 import android.view.View
 import android.widget.Button
 import android.widget.EditText
+import android.widget.ImageButton
 import android.widget.ProgressBar
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
-import com.erdene.callerinsight.Constants.BACKEND_URL
-import org.json.JSONObject
-import java.net.HttpURLConnection
-import java.net.URL
+import androidx.lifecycle.lifecycleScope
+import com.erdene.callerinsight.data.AppGraph
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class ManualSearchActivity : AppCompatActivity() {
+
+    private val repo by lazy { AppGraph.repo }
 
     private lateinit var etPhoneNumber: EditText
     private lateinit var btnSearch: Button
@@ -29,8 +33,12 @@ class ManualSearchActivity : AppCompatActivity() {
         progressBar = findViewById(R.id.progressBar)
         tvResult = findViewById(R.id.tvResult)
 
+        findViewById<ImageButton>(R.id.btnBack).setOnClickListener {
+            finish()
+        }
+
         btnSearch.setOnClickListener {
-            val phoneNumber = etPhoneNumber.text.toString()
+            val phoneNumber = etPhoneNumber.text.toString().trim()
             if (phoneNumber.isNotBlank()) {
                 searchNumber(phoneNumber)
             }
@@ -42,56 +50,25 @@ class ManualSearchActivity : AppCompatActivity() {
         tvResult.visibility = View.GONE
         btnSearch.isEnabled = false
 
-        Thread {
-            val result = fetchCallerInsight(number)
-            runOnUiThread {
+        lifecycleScope.launch {
+            try {
+                val res = withContext(Dispatchers.IO) { repo.analyze(number) }
+
+                tvResult.text = buildString {
+                    // "Эрсдэл" хэсгийг арилгав
+                    append(res.summary)
+                    if (!res.confidence.isNullOrBlank()) {
+                        append("\n\n(Нарийвчлал: ").append(res.confidence).append(")")
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e("ManualSearchActivity", "Хайлт амжилтгүй: ${e.message}", e)
+                tvResult.text = "Хайлт амжилтгүй боллоо: ${e.message}"
+            } finally {
                 progressBar.visibility = View.GONE
-                tvResult.text = result
                 tvResult.visibility = View.VISIBLE
                 btnSearch.isEnabled = true
             }
-        }.start()
-    }
-
-    private fun fetchCallerInsight(number: String): String {
-        return try {
-            val url = URL(BACKEND_URL)
-            val conn = (url.openConnection() as HttpURLConnection).apply {
-                requestMethod = "POST"
-                connectTimeout = 7000
-                readTimeout = 12000
-                doOutput = true
-                setRequestProperty("Content-Type", "application/json")
-            }
-
-            val body = JSONObject().put("phone_number", number).toString()
-            conn.outputStream.use { it.write(body.toByteArray(Charsets.UTF_8)) }
-
-            val code = conn.responseCode
-            val responseText = if (code in 200..299) {
-                conn.inputStream.bufferedReader().use { it.readText() }
-            } else {
-                conn.errorStream?.bufferedReader()?.use { it.readText() } ?: ""
-            }
-
-            if (code !in 200..299) {
-                return "Алдаа ($code): $responseText"
-            }
-
-            val json = JSONObject(responseText)
-            val risk = json.optString("risk_level", "Тодорхойгүй")
-            val summary = json.optString("summary", "Мэдээлэл олдсонгүй")
-            val confidence = json.optString("confidence", "")
-
-            buildString {
-                append("Эрсдэл: ").append(risk)
-                if (confidence.isNotBlank()) append(" (").append(confidence).append(")")
-                append("\n\n")
-                append(summary)
-            }
-        } catch (e: Exception) {
-            Log.e("ManualSearchActivity", "Хайлт амжилтгүй: ${e.message}", e)
-            "Хайлт амжилтгүй боллоо: ${e.message}"
         }
     }
 }

@@ -1,296 +1,303 @@
 package com.erdene.callerinsight
 
-import android.app.AppOpsManager
+import android.annotation.SuppressLint
 import android.app.Service
-import android.app.usage.UsageStatsManager
 import android.content.Context
 import android.content.Intent
+import android.content.res.ColorStateList
+import android.content.res.Configuration
+import android.graphics.Color
 import android.graphics.PixelFormat
+import android.net.Uri
 import android.os.Build
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
-import android.telephony.PhoneStateListener
+import android.provider.CallLog
+import android.provider.ContactsContract
+import android.provider.Settings
 import android.telephony.TelephonyCallback
 import android.telephony.TelephonyManager
 import android.util.Log
 import android.view.Gravity
 import android.view.LayoutInflater
+import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
+import android.widget.ImageButton
 import android.widget.TextView
-import com.erdene.callerinsight.Constants.BACKEND_URL
-import org.json.JSONObject
-import java.net.HttpURLConnection
-import java.net.URL
+import androidx.core.graphics.toColorInt
+import com.erdene.callerinsight.data.AppGraph
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import org.json.JSONArray
 import java.util.concurrent.atomic.AtomicInteger
 
 class CallOverlayService : Service() {
 
+    private val repo by lazy { AppGraph.repo }
+    private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+
     companion object {
         private const val TAG = "CallerInsight"
         private const val EXTRA_NUMBER = "phone_number"
-
-        // Emulator: http://10.0.2.2:8000/analyze
-        // Real phone: change to your Mac LAN IP like http://192.168.0.50:8000/analyze
-
-        private const val CHECK_MS = 350L
-        private const val STREAK_THRESHOLD = 3 // ~1 second
+        private const val AUTO_DISMISS_MS = 60_000L
 
         fun show(context: Context, number: String) {
             val i = Intent(context, CallOverlayService::class.java).apply {
                 putExtra(EXTRA_NUMBER, number)
             }
-            context.startService(i)
-        }
-
-        fun hide(context: Context) {
-            context.stopService(Intent(context, CallOverlayService::class.java))
+            try {
+                context.startService(i)
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to start CallOverlayService: ${e.message}", e)
+            }
         }
     }
 
     private lateinit var wm: WindowManager
-    private lateinit var tm: TelephonyManager
-
     private var overlayView: View? = null
     private var tvNumber: TextView? = null
     private var tvSummary: TextView? = null
 
     private val requestToken = AtomicInteger(0)
-
-    private var telephonyCallback: TelephonyCallback? = null
-    private var phoneStateListener: PhoneStateListener? = null
-
     private val handler = Handler(Looper.getMainLooper())
 
-    // Adjust as needed for your device
-    private val dialerPackages = setOf(
-        "com.google.android.dialer",
-        "com.samsung.android.dialer",
-        "com.samsung.android.incallui"
-    )
+    private lateinit var telephonyManager: TelephonyManager
+    private var telephonyCallback: Any? = null
 
-    private var dialerStreak = 0
-
-    private val visibilityWatcher = object : Runnable {
-        override fun run() {
-            // Only while ringing
-            val state = tm.callState
-            if (state != TelephonyManager.CALL_STATE_RINGING) {
-                stopSelf()
-                return
-            }
-
-            // If usage access not granted -> HIDE (so you won't see it on YouTube)
-            if (!hasUsageAccess()) {
-                overlayView?.visibility = View.GONE
-                handler.postDelayed(this, CHECK_MS)
-                return
-            }
-
-            val fg = getTopPackageByUsageStats()
-            val isDialerTop = fg != null && fg in dialerPackages
-
-            if (isDialerTop) dialerStreak++ else dialerStreak = 0
-            val shouldShow = dialerStreak >= STREAK_THRESHOLD
-
-            overlayView?.visibility = if (shouldShow) View.VISIBLE else View.GONE
-
-            // Debug: see what package it thinks is top
-            Log.d(TAG, "Top=$fg dialerStreak=$dialerStreak show=$shouldShow")
-
-            handler.postDelayed(this, CHECK_MS)
-        }
+    private val autoDismissRunnable = Runnable {
+        Log.d(TAG, "Auto dismiss overlay")
+        stopSelf()
     }
 
     override fun onCreate() {
         super.onCreate()
         wm = getSystemService(WINDOW_SERVICE) as WindowManager
-        tm = getSystemService(TelephonyManager::class.java)
+        telephonyManager = getSystemService(TELEPHONY_SERVICE) as TelephonyManager
+        setupPhoneStateListener()
+    }
 
-        registerCallStateListener()
-        handler.post(visibilityWatcher)
+    private fun setupPhoneStateListener() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val callback = object : TelephonyCallback(), TelephonyCallback.CallStateListener {
+                override fun onCallStateChanged(state: Int) {
+                    if (state == TelephonyManager.CALL_STATE_IDLE) {
+                        stopSelf()
+                    }
+                }
+            }
+            telephonyManager.registerTelephonyCallback(mainExecutor, callback)
+            telephonyCallback = callback
+        } else {
+            @Suppress("DEPRECATION")
+            val listener = object : android.telephony.PhoneStateListener() {
+                @Suppress("OVERRIDE_DEPRECATION")
+                override fun onCallStateChanged(state: Int, phoneNumber: String?) {
+                    if (state == TelephonyManager.CALL_STATE_IDLE) {
+                        stopSelf()
+                    }
+                }
+            }
+            @Suppress("DEPRECATION")
+            telephonyManager.listen(listener, android.telephony.PhoneStateListener.LISTEN_CALL_STATE)
+            telephonyCallback = listener
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val number = intent?.getStringExtra(EXTRA_NUMBER) ?: return START_NOT_STICKY
+
+        if (!Settings.canDrawOverlays(this)) {
+            stopSelf()
+            return START_NOT_STICKY
+        }
+
         showOrUpdate(number)
-        return START_STICKY
+        return START_NOT_STICKY
     }
 
-    private fun showOrUpdate(number: String) {
-        if (overlayView == null) {
-            val inflater = LayoutInflater.from(this)
-            overlayView = inflater.inflate(R.layout.overlay_summary, null)
-
-            tvNumber = overlayView!!.findViewById(R.id.tvOverlayNumber)
-            tvSummary = overlayView!!.findViewById(R.id.tvOverlaySummary)
-
-            val type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
-            } else {
-                @Suppress("DEPRECATION")
-                WindowManager.LayoutParams.TYPE_PHONE
-            }
-
-            val params = WindowManager.LayoutParams(
-                WindowManager.LayoutParams.MATCH_PARENT,
-                WindowManager.LayoutParams.WRAP_CONTENT,
-                type,
-                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                        WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
-                        WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
-                PixelFormat.TRANSLUCENT
-            ).apply {
-                // Center/middle
-                gravity = Gravity.CENTER
-                x = 0
-                y = 0
-            }
-
-            wm.addView(overlayView, params)
-        }
-
-        // Start hidden until dialer is really foreground
-        overlayView?.visibility = View.GONE
-        dialerStreak = 0
-
-        tvNumber?.text = number
-        tvSummary?.text = "Хайж байна…"
-
-        val token = requestToken.incrementAndGet()
-        Thread {
-            val result = fetchCallerInsight(number)
-            if (token != requestToken.get()) return@Thread
-
-            tvSummary?.post {
-                if (token == requestToken.get()) {
-                    tvSummary?.text = result
-                }
-            }
-        }.start()
-    }
-
-    private fun onCallStateChanged(state: Int) {
-        when (state) {
-            TelephonyManager.CALL_STATE_RINGING -> { /* keep */ }
-            TelephonyManager.CALL_STATE_OFFHOOK -> stopSelf()
-            TelephonyManager.CALL_STATE_IDLE -> stopSelf()
-        }
-    }
-
-    private fun registerCallStateListener() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            val cb = object : TelephonyCallback(), TelephonyCallback.CallStateListener {
-                override fun onCallStateChanged(state: Int) {
-                    this@CallOverlayService.onCallStateChanged(state)
-                }
-            }
-            telephonyCallback = cb
-            tm.registerTelephonyCallback(mainExecutor, cb)
-        } else {
-            @Suppress("DEPRECATION")
-            val listener = object : PhoneStateListener() {
-                override fun onCallStateChanged(state: Int, phoneNumber: String?) {
-                    this@CallOverlayService.onCallStateChanged(state)
-                }
-            }
-            phoneStateListener = listener
-            @Suppress("DEPRECATION")
-            tm.listen(listener, PhoneStateListener.LISTEN_CALL_STATE)
-        }
-    }
-
-    private fun unregisterCallStateListener() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            telephonyCallback?.let { tm.unregisterTelephonyCallback(it) }
-            telephonyCallback = null
-        } else {
-            @Suppress("DEPRECATION")
-            phoneStateListener?.let { tm.listen(it, PhoneStateListener.LISTEN_NONE) }
-            phoneStateListener = null
-        }
-    }
-
-    private fun hasUsageAccess(): Boolean {
+    private fun getContactName(number: String): String? {
         return try {
-            val appOps = getSystemService(APP_OPS_SERVICE) as AppOpsManager
-            val mode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                appOps.unsafeCheckOpNoThrow(
-                    AppOpsManager.OPSTR_GET_USAGE_STATS,
-                    android.os.Process.myUid(),
-                    packageName
-                )
-            } else {
-                @Suppress("DEPRECATION")
-                appOps.checkOpNoThrow(
-                    AppOpsManager.OPSTR_GET_USAGE_STATS,
-                    android.os.Process.myUid(),
-                    packageName
-                )
+            val uri = Uri.withAppendedPath(ContactsContract.PhoneLookup.CONTENT_FILTER_URI, Uri.encode(number))
+            val cursor = contentResolver.query(uri, arrayOf(ContactsContract.PhoneLookup.DISPLAY_NAME), null, null, null)
+            var contactName: String? = null
+            if (cursor != null && cursor.moveToFirst()) {
+                contactName = cursor.getString(cursor.getColumnIndexOrThrow(ContactsContract.PhoneLookup.DISPLAY_NAME))
+                cursor.close()
             }
-            mode == AppOpsManager.MODE_ALLOWED
-        } catch (_: Exception) {
-            false
-        }
-    }
-
-    private fun getTopPackageByUsageStats(): String? {
-        return try {
-            val usm = getSystemService(USAGE_STATS_SERVICE) as UsageStatsManager
-            val end = System.currentTimeMillis()
-            val begin = end - 10_000
-            val stats = usm.queryUsageStats(UsageStatsManager.INTERVAL_DAILY, begin, end)
-            if (stats.isNullOrEmpty()) return null
-            stats.maxByOrNull { it.lastTimeUsed }?.packageName
+            contactName
         } catch (_: Exception) {
             null
         }
     }
 
-    private fun fetchCallerInsight(number: String): String {
-        return try {
-            val url = URL(BACKEND_URL)
-            val conn = (url.openConnection() as HttpURLConnection).apply {
-                requestMethod = "POST"
-                connectTimeout = 7000
-                readTimeout = 12000
-                doOutput = true
-                setRequestProperty("Content-Type", "application/json")
+    private fun getCarrierName(number: String): String {
+        val cleanNumber = number.replace("+976", "").replace(" ", "").replace("-", "")
+        if (cleanNumber.length < 2) return ""
+        val prefix = if (cleanNumber.startsWith("0")) cleanNumber.substring(1, 3) else cleanNumber.substring(0, 2)
+        return when (prefix) {
+            "99", "95", "94", "85", "75" -> "Mobicom"
+            "88", "89", "86", "80", "70" -> "Unitel"
+            "91", "90", "96", "66" -> "Skytel"
+            "98", "97", "93", "83" -> "G-Mobile"
+            else -> ""
+        }
+    }
+
+    private fun getCallHistorySummary(number: String): String {
+        try {
+            val cursor = contentResolver.query(
+                CallLog.Calls.CONTENT_URI,
+                arrayOf(CallLog.Calls.TYPE),
+                "${CallLog.Calls.NUMBER} = ?",
+                arrayOf(number),
+                null
+            )
+            if (cursor == null) return ""
+            var total = 0; var missed = 0; var answered = 0
+            while (cursor.moveToNext()) {
+                total++
+                val type = cursor.getInt(cursor.getColumnIndexOrThrow(CallLog.Calls.TYPE))
+                when (type) {
+                    CallLog.Calls.MISSED_TYPE, CallLog.Calls.REJECTED_TYPE -> missed++
+                    CallLog.Calls.INCOMING_TYPE, CallLog.Calls.OUTGOING_TYPE -> answered++
+                }
+            }
+            cursor.close()
+            return if (total == 0) getString(R.string.new_number_history)
+            else getString(R.string.call_history_summary, total, answered, missed)
+        } catch (_: Exception) {
+            return ""
+        }
+    }
+
+    private fun saveToHistory(number: String, summary: String) {
+        val sharedPref = getSharedPreferences("app_history", MODE_PRIVATE)
+        val historyJson = sharedPref.getString("recent_calls", "[]") ?: "[]"
+        try {
+            val array = JSONArray(historyJson)
+            val newList = mutableListOf<String>()
+            val newItem = "$number|$summary|${System.currentTimeMillis()}"
+            newList.add(newItem)
+            for (i in 0 until array.length()) {
+                val item = array.getString(i)
+                if (!item.startsWith("$number|") && newList.size < 20) {
+                    newList.add(item)
+                }
+            }
+            sharedPref.edit().putString("recent_calls", JSONArray(newList).toString()).apply()
+        } catch (_: Exception) {}
+    }
+
+    @SuppressLint("ClickableViewAccessibility")
+    private fun showOrUpdate(number: String) {
+        if (overlayView == null) {
+            val sharedPref = getSharedPreferences("theme_prefs", MODE_PRIVATE)
+            val isDarkMode = sharedPref.getBoolean("dark_mode", false)
+            val config = Configuration(resources.configuration)
+            config.uiMode = if (isDarkMode) (config.uiMode and Configuration.UI_MODE_NIGHT_MASK.inv()) or Configuration.UI_MODE_NIGHT_YES
+            else (config.uiMode and Configuration.UI_MODE_NIGHT_MASK.inv()) or Configuration.UI_MODE_NIGHT_NO
+
+            val themedContext = createConfigurationContext(config)
+            
+            @Suppress("InflateParams")
+            overlayView = LayoutInflater.from(themedContext).inflate(R.layout.overlay_summary, null)
+
+            val cardView = overlayView!!.findViewById<View>(R.id.card)
+            tvNumber = overlayView!!.findViewById(R.id.tvOverlayNumber)
+            tvSummary = overlayView!!.findViewById(R.id.tvOverlaySummary)
+            val btnClose = overlayView!!.findViewById<ImageButton>(R.id.btnClose)
+
+            if (isDarkMode) {
+                cardView.backgroundTintList = ColorStateList.valueOf("#E61E1E1E".toColorInt())
+                tvNumber?.setTextColor(Color.WHITE)
+                tvSummary?.setTextColor("#EEEEEE".toColorInt())
+                btnClose.setColorFilter(Color.WHITE)
+            } else {
+                cardView.backgroundTintList = ColorStateList.valueOf("#F2FFFFFF".toColorInt())
+                tvNumber?.setTextColor("#111111".toColorInt())
+                tvSummary?.setTextColor("#222222".toColorInt())
+                btnClose.setColorFilter("#111111".toColorInt())
             }
 
-            val body = JSONObject().put("phone_number", number).toString()
-            conn.outputStream.use { it.write(body.toByteArray(Charsets.UTF_8)) }
+            btnClose.setOnClickListener { stopSelf() }
 
-            val code = conn.responseCode
-            val resp = (if (code in 200..299) conn.inputStream else conn.errorStream)
-                .bufferedReader().use { it.readText() }
+            val type = WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+            val params = WindowManager.LayoutParams(
+                WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.WRAP_CONTENT,
+                type, WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                        WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
+                        WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON,
+                PixelFormat.TRANSLUCENT
+            ).apply { gravity = Gravity.CENTER }
 
-            if (code !in 200..299) return "Backend error ($code)"
+            overlayView!!.setOnTouchListener(object : View.OnTouchListener {
+                private var initialY: Int = 0
+                private var initialTouchY: Float = 0f
+                override fun onTouch(v: View, event: MotionEvent): Boolean {
+                    when (event.action) {
+                        MotionEvent.ACTION_DOWN -> {
+                            initialY = params.y
+                            initialTouchY = event.rawY
+                            return true
+                        }
+                        MotionEvent.ACTION_MOVE -> {
+                            params.y = initialY + (event.rawY - initialTouchY).toInt()
+                            wm.updateViewLayout(overlayView, params)
+                            return true
+                        }
+                    }
+                    return false
+                }
+            })
 
-            val json = JSONObject(resp)
-            val risk = json.optString("risk_level", "unknown")
-            val summary = json.optString("summary", "No info")
-            val confidence = json.optString("confidence", "")
+            try { wm.addView(overlayView, params) } catch (_: Exception) { stopSelf(); return }
+        }
 
-            if (confidence.isNotBlank()) "Эрсдэл: $risk ($confidence)\n$summary"
-            else "Эрсдэл: $risk\n$summary"
-        } catch (e: Exception) {
-            "Failed to fetch info"
+        handler.removeCallbacks(autoDismissRunnable)
+        handler.postDelayed(autoDismissRunnable, AUTO_DISMISS_MS)
+
+        val contactName = getContactName(number)
+        val carrier = getCarrierName(number)
+        val displayName = if (contactName != null) "$contactName ($number)" else if (carrier.isNotEmpty()) "$number ($carrier)" else number
+        tvNumber?.text = displayName
+        
+        val historyText = getCallHistorySummary(number)
+        tvSummary?.text = getString(R.string.searching_with_history, historyText)
+
+        val token = requestToken.incrementAndGet()
+        serviceScope.launch {
+            try {
+                val res = withContext(Dispatchers.IO) { repo.analyze(number) }
+                if (token != requestToken.get()) return@launch
+                saveToHistory(number, res.summary)
+                tvSummary?.text = if (!res.confidence.isNullOrBlank()) getString(R.string.summary_with_confidence, res.summary, historyText, res.confidence)
+                else getString(R.string.summary_basic, res.summary, historyText)
+            } catch (_: Exception) {
+                if (token == requestToken.get()) tvSummary?.text = getString(R.string.error_with_history, historyText)
+            }
         }
     }
 
     override fun onDestroy() {
         super.onDestroy()
-        handler.removeCallbacks(visibilityWatcher)
-        unregisterCallStateListener()
+        handler.removeCallbacks(autoDismissRunnable)
+        serviceScope.cancel()
+        unregisterTelephony()
+        overlayView?.let { try { wm.removeView(it) } catch (_: Exception) {} }
+    }
 
-        overlayView?.let {
-            try { wm.removeView(it) } catch (_: Exception) {}
-        }
-        overlayView = null
-        tvNumber = null
-        tvSummary = null
+    @Suppress("DEPRECATION")
+    private fun unregisterTelephony() {
+        val callback = telephonyCallback ?: return
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && callback is TelephonyCallback) telephonyManager.unregisterTelephonyCallback(callback)
+        else if (callback is android.telephony.PhoneStateListener) telephonyManager.listen(callback, android.telephony.PhoneStateListener.LISTEN_NONE)
+        telephonyCallback = null
     }
 
     override fun onBind(intent: Intent?): IBinder? = null

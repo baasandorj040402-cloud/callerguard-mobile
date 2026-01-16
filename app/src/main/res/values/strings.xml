@@ -1,9 +1,15 @@
 <resources>
-    <string name="app_name">CallerInsight</string>
-    <string name="searching">Searching…</string>
-    <string name="unknown_number">Unknown number</string>
-    <string name="failed_fetch">Failed to fetch info.</string>
-    <string name="backend_error">Backend error</string>
-    <string name="no_info">No info.</string>
-    <string name="risk_prefix">Risk: </string>
+    <string name="app_name">Who?</string>
+    <string name="searching">Хайж байна…</string>
+    <string name="unknown_number">Үл мэдэгдэх дугаар</string>
+    <string name="failed_fetch">Мэдээлэл авахад алдаа гарлаа.</string>
+    <string name="backend_error">Серверийн алдаа</string>
+    <string name="no_info">Мэдээлэл олдсонгүй.</string>
+    <string name="risk_prefix">Эрсдэл: </string>
+    <string name="new_number_history">\n(Шинэ дугаар)</string>
+    <string name="call_history_summary">\n(Өмнө нь %1$d удаа холбогдсон: %2$d ярьсан, %3$d аваагүй)</string>
+    <string name="searching_with_history">Хайж байна…%1$s</string>
+    <string name="error_with_history">Мэдээлэл авахад алдаа гарлаа%1$s</string>
+    <string name="summary_with_confidence">%1$s%2$s\n\n(Нарийвчлал: %3$s)</string>
+    <string name="summary_basic">%1$s%2$s</string>
 </resources>
