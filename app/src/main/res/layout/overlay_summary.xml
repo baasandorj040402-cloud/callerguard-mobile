@@ -10,33 +10,69 @@
         android:layout_height="wrap_content"
         android:layout_gravity="center"
         android:background="@drawable/overlay_bg"
-        android:padding="12dp">
+        android:padding="16dp">
+
+        <!-- Top Left Branding (Enlarged again) -->
+
+        <!-- Close Button -->
+
+        <ImageView
+            android:id="@+id/ivOverlayLogo"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:src="@drawable/logo"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent" />
 
         <TextView
-            android:id="@+id/tvOverlayNumber"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:text="99112233"
+            android:id="@+id/tvOverlayAppTitle"
+            android:layout_width="61dp"
+            android:layout_height="30dp"
+            android:layout_marginStart="4dp"
+            android:text="Who?"
+            android:textColor="@color/blue_500"
+            android:textSize="22sp"
             android:textStyle="bold"
-            android:textSize="16sp"
-            android:maxLines="1"
-            android:ellipsize="end"
-            android:gravity="start"
-            android:layout_marginEnd="8dp"
-            android:textColor="#111111"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintEnd_toStartOf="@id/btnClose"
-            app:layout_constraintTop_toTopOf="parent" />
+            app:layout_constraintBottom_toTopOf="@+id/divider"
+            app:layout_constraintStart_toEndOf="@id/ivOverlayLogo"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintVertical_bias="0.09" />
 
         <ImageButton
             android:id="@+id/btnClose"
-            android:layout_width="36dp"
-            android:layout_height="36dp"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
             android:contentDescription="Close"
             android:background="?android:attr/selectableItemBackgroundBorderless"
             android:src="@android:drawable/ic_menu_close_clear_cancel"
             app:layout_constraintTop_toTopOf="parent"
             app:layout_constraintEnd_toEndOf="parent" />
+
+        <View
+            android:id="@+id/divider"
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:background="#1A000000"
+            android:layout_marginTop="12dp"
+            app:layout_constraintTop_toBottomOf="@id/ivOverlayLogo" />
+
+        <!-- Phone Number -->
+
+        <!-- Information / Summary -->
+
+        <TextView
+            android:id="@+id/tvOverlayNumber"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:text="99112233"
+            android:textColor="@color/overlay_text_primary"
+            android:textSize="18sp"
+            android:textStyle="bold"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintHorizontal_bias="1.0"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@id/divider" />
 
         <TextView
             android:id="@+id/tvOverlaySummary"
@@ -44,11 +80,67 @@
             android:layout_height="wrap_content"
             android:text="Хайж байна…"
             android:textSize="14sp"
-            android:textColor="#222222"
-            android:layout_marginTop="10dp"
+            android:textColor="@color/overlay_text_secondary"
+            android:layout_marginTop="8dp"
             app:layout_constraintTop_toBottomOf="@id/tvOverlayNumber"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintEnd_toEndOf="parent" />
+
+        <!-- Web Search Section (The "G" card style) -->
+        <androidx.constraintlayout.widget.ConstraintLayout
+            android:id="@+id/layoutWebSearch"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:padding="12dp"
+            android:background="@drawable/web_card_bg"
+            android:visibility="gone"
+            app:layout_constraintTop_toBottomOf="@id/tvOverlaySummary"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent">
+
+            <TextView
+                android:id="@+id/tvGIcon"
+                android:layout_width="18dp"
+                android:layout_height="18dp"
+                android:background="#1A4285F4"
+                android:text="G"
+                android:textColor="#4285F4"
+                android:textSize="10sp"
+                android:textStyle="bold"
+                android:gravity="center"
+                app:layout_constraintTop_toTopOf="parent"
+                app:layout_constraintStart_toStartOf="parent" />
+
+            <TextView
+                android:id="@+id/tvWebLabel"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="WEB SEARCH"
+                android:textSize="9sp"
+                android:textStyle="bold"
+                android:textColor="#4285F4"
+                android:layout_marginStart="6dp"
+                android:letterSpacing="0.1"
+                app:layout_constraintBottom_toBottomOf="@id/tvGIcon"
+                app:layout_constraintStart_toEndOf="@id/tvGIcon"
+                app:layout_constraintTop_toTopOf="@id/tvGIcon" />
+
+            <TextView
+                android:id="@+id/tvWebTitle"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:text="Sarah Jenkins - VP Operations | LinkedIn"
+                android:textSize="13sp"
+                android:textStyle="bold"
+                android:textColor="#8AB4F8"
+                android:layout_marginTop="6dp"
+                android:maxLines="1"
+                android:ellipsize="end"
+                app:layout_constraintTop_toBottomOf="@id/tvGIcon"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintEnd_toEndOf="parent" />
+        </androidx.constraintlayout.widget.ConstraintLayout>
 
     </androidx.constraintlayout.widget.ConstraintLayout>
 </FrameLayout>
