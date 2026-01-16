@@ -20,8 +20,8 @@ class CallerInsightClient(
     private val baseUrl: String
 ) {
     private val client = OkHttpClient.Builder()
-        .connectTimeout(7, TimeUnit.SECONDS)
-        .readTimeout(12, TimeUnit.SECONDS)
+        .connectTimeout(15, TimeUnit.SECONDS)
+        .readTimeout(40, TimeUnit.SECONDS)
         .build()
 
     suspend fun analyze(phoneNumber: String): CallerInsight {
