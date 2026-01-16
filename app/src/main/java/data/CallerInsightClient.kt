@@ -13,7 +13,9 @@ import kotlin.coroutines.resumeWithException
 data class CallerInsight(
     val riskLevel: String,
     val summary: String,
-    val confidence: String?
+    val confidence: String?,
+    val webLink: String? = null,
+    val webTitle: String? = null
 )
 
 class CallerInsightClient(
@@ -39,7 +41,9 @@ class CallerInsightClient(
             return CallerInsight(
                 riskLevel = obj.optString("risk_level", "unknown"),
                 summary = obj.optString("summary", "No info"),
-                confidence = if (obj.isNull("confidence")) null else obj.optString("confidence")
+                confidence = if (obj.isNull("confidence")) null else obj.optString("confidence"),
+                webLink = if (obj.isNull("web_link")) null else obj.optString("web_link"),
+                webTitle = if (obj.isNull("web_title")) null else obj.optString("web_title")
             )
         }
     }

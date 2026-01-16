@@ -12,4 +12,5 @@
     <string name="error_with_history">Мэдээлэл авахад алдаа гарлаа%1$s</string>
     <string name="summary_with_confidence">%1$s%2$s\n\n(Нарийвчлал: %3$s)</string>
     <string name="summary_basic">%1$s%2$s</string>
+    <string name="privacy_disclaimer">Та дээрх зөвшөөрлүүдийг өгснөөр бидний апп-ыг чөлөөтэй ашиглах боломжтой. Энэхүү зөвшөөрлөөр бид таны хувийн мэдээллийг буруугаар ашиглаж эсвэл наймаалцаж цааш түгээхгүй.</string>
 </resources>

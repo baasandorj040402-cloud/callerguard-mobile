@@ -4,7 +4,9 @@
     <color name="status_stroke">#2196F3</color>
     <color name="status_text">#FFFFFF</color>
     <color name="edittext_bg">#333333</color>
+    <color name="edittext_text">#FFFFFF</color>
     <color name="overlay_background">#E61E1E1E</color>
     <color name="overlay_text_primary">#FFFFFF</color>
     <color name="overlay_text_secondary">#EEEEEE</color>
+    <color name="button_text_color">#FFFFFF</color>
 </resources>
